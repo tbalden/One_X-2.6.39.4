@@ -262,16 +262,13 @@ static int freq_table_get_index(struct cpufreq_stats *stat, unsigned int freq)
  */
 static void cpufreq_stats_free_table(unsigned int cpu)
 {
-	spin_lock(&cpufreq_stats_lock);
 	struct cpufreq_stats *stat = per_cpu(cpufreq_stats_table, cpu);
-	per_cpu(cpufreq_stats_table, cpu) = NULL;
-	spin_unlock(&cpufreq_stats_lock);
 
 	if (stat) {
-		cpufreq_stats_update(cpu);
 		kfree(stat->time_in_state);
 		kfree(stat);
 	}
+	per_cpu(cpufreq_stats_table, cpu) = NULL;
 }
 
 /* must be called early in the CPU removal sequence (before
