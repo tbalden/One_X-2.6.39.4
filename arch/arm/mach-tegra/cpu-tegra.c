@@ -797,38 +797,23 @@ static struct pm_qos_request_list cap_cpu_freq_req;
 static int tegra_pm_notify(struct notifier_block *nb, unsigned long event,
 	void *dummy)
 {
-	int cpu;
+	mutex_lock(&tegra_cpu_lock);
 	if (event == PM_SUSPEND_PREPARE) {
-		mutex_lock(&tegra_cpu_lock);
 		is_suspended = true;
 		pr_info("Tegra cpufreq suspend: setting frequency to %d kHz\n",
 			freq_table[suspend_index].frequency);
 		tegra_update_cpu_speed(freq_table[suspend_index].frequency);
 		tegra_auto_hotplug_governor(
 			freq_table[suspend_index].frequency, true);
-		mutex_unlock(&tegra_cpu_lock);
-		for_each_online_cpu(cpu) {
-			if(cpu==0)
-				continue;
-			cpu_down(cpu);
-		}
 	} else if (event == PM_POST_SUSPEND) {
-		mutex_lock(&tegra_cpu_lock);
 		unsigned int freq;
 		is_suspended = false;
 		tegra_cpu_edp_init(true);
-		if (wake_reason_resume == 0x80) {
-			tegra_update_cpu_speed(BOOST_CPU_FREQ_MIN);
-			tegra_auto_hotplug_governor(
-				BOOST_CPU_FREQ_MIN, false);
-		} else {
-			tegra_cpu_set_speed_cap(&freq);
-		}
-
+		tegra_cpu_set_speed_cap(&freq);
 		pr_info("Tegra cpufreq resume: restoring frequency to %d kHz\n",
 			freq);
-		mutex_unlock(&tegra_cpu_lock);
 	}
+	mutex_unlock(&tegra_cpu_lock);
 
 	return NOTIFY_OK;
 }
