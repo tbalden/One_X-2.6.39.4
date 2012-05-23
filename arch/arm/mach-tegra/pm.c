@@ -3,7 +3,7 @@
  *
  * CPU complex suspend & resume functions for Tegra SoCs
  *
- * Copyright (c) 2009-2012, NVIDIA Corporation.
+ * Copyright (c) 2009-2011, NVIDIA Corporation.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -179,6 +179,13 @@ static struct clk *tegra_pclk;
 static const struct tegra_suspend_platform_data *pdata;
 static enum tegra_suspend_mode current_suspend_mode = TEGRA_SUSPEND_NONE;
 
+static const char *tegra_suspend_name[TEGRA_MAX_SUSPEND_MODE] = {
+	[TEGRA_SUSPEND_NONE]	= "none",
+	[TEGRA_SUSPEND_LP2]	= "lp2",
+	[TEGRA_SUSPEND_LP1]	= "lp1",
+	[TEGRA_SUSPEND_LP0]	= "lp0",
+};
+
 #if defined(CONFIG_TEGRA_CLUSTER_CONTROL) && INSTRUMENT_CLUSTER_SWITCH
 enum tegra_cluster_switch_time_id {
 	tegra_cluster_switch_time_id_start = 0,
@@ -208,13 +215,6 @@ static unsigned long
 #endif
 
 #ifdef CONFIG_PM_SLEEP
-static const char *tegra_suspend_name[TEGRA_MAX_SUSPEND_MODE] = {
-	[TEGRA_SUSPEND_NONE]	= "none",
-	[TEGRA_SUSPEND_LP2]	= "lp2",
-	[TEGRA_SUSPEND_LP1]	= "lp1",
-	[TEGRA_SUSPEND_LP0]	= "lp0",
-};
-
 unsigned long tegra_cpu_power_good_time(void)
 {
 	if (WARN_ON_ONCE(!pdata))
@@ -366,6 +366,14 @@ static void restore_cpu_complex(u32 mode)
 	unsigned int reg, policy;
 
 	BUG_ON(cpu != 0);
+
+	/* restore original PLL settings */
+#ifdef CONFIG_ARCH_TEGRA_2x_SOC
+	writel(tegra_sctx.pllp_misc, clk_rst + CLK_RESET_PLLP_MISC);
+	writel(tegra_sctx.pllp_base, clk_rst + CLK_RESET_PLLP_BASE);
+#endif
+	writel(tegra_sctx.pllp_outa, clk_rst + CLK_RESET_PLLP_OUTA);
+	writel(tegra_sctx.pllp_outb, clk_rst + CLK_RESET_PLLP_OUTB);
 
 	/* Is CPU complex already running on PLLX? */
 	reg = readl(clk_rst + CLK_RESET_CCLK_BURST);
@@ -571,7 +579,6 @@ unsigned int tegra_idle_lp2_last(unsigned int sleep_time, unsigned int flags)
 {
 	u32 mode;	/* hardware + software power mode flags */
 	unsigned int remain;
-	pgd_t *pgd;
 
 	/* Only the last cpu down does the final suspend steps */
 	mode = readl(pmc + PMC_CTRL);
@@ -606,14 +613,6 @@ unsigned int tegra_idle_lp2_last(unsigned int sleep_time, unsigned int flags)
 	suspend_cpu_complex(mode);
 	tegra_cluster_switch_time(flags, tegra_cluster_switch_time_id_prolog);
 	flush_cache_all();
-	/*
-	 * No need to flush complete L2. Cleaning kernel and IO mappings
-	 * is enough for the LP code sequence that has L2 disabled but
-	 * MMU on.
-	 */
-	pgd = cpu_get_pgd();
-	outer_clean_range(__pa(pgd + USER_PTRS_PER_PGD),
-			  __pa(pgd + PTRS_PER_PGD));
 	outer_disable();
 
 	tegra_sleep_cpu(PLAT_PHYS_OFFSET - PAGE_OFFSET);
@@ -721,9 +720,7 @@ static void tegra_pm_set(enum tegra_suspend_mode mode)
 
 	switch (mode) {
 	case TEGRA_SUSPEND_LP0:
-#ifdef CONFIG_ARCH_TEGRA_3x_SOC
 		rate = clk_get_rate_all_locked(tegra_pclk);
-#endif
 		if (pdata->combined_req) {
 			reg |= TEGRA_POWER_PWRREQ_OE;
 			reg &= ~TEGRA_POWER_CPU_PWRREQ_OE;
@@ -1015,7 +1012,9 @@ static struct kobj_attribute suspend_mode_attribute =
 	__ATTR(mode, 0644, suspend_mode_show, suspend_mode_store);
 
 static struct kobject *suspend_kobj;
+#endif
 
+#ifdef CONFIG_PM_SLEEP
 static int tegra_pm_enter_suspend(void)
 {
 	pr_info("[R] Entering suspend state %s\n", lp_state[current_suspend_mode]);
