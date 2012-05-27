@@ -335,8 +335,6 @@ struct tegra_pcie_info {
 #define pmc_readl(reg) \
 	__raw_readl((u32)reg_pmc_base + (reg))
 
-static void __iomem *reg_pmc_base = IO_ADDRESS(TEGRA_PMC_BASE);
-
 static struct tegra_pcie_info tegra_pcie = {
 	.res_mmio = {
 		.name = "PCI IO",
@@ -738,21 +736,10 @@ static void tegra_pcie_enable_controller(void)
 {
 	u32 val, reg;
 	int i;
-	void __iomem *reg_apb_misc_base;
-	void __iomem *reg_mselect_base;
-	reg_apb_misc_base = IO_ADDRESS(TEGRA_APB_MISC_BASE);
-	reg_mselect_base = IO_ADDRESS(TEGRA_MSELECT_BASE);
-
-	/* select the PCIE APERTURE in MSELECT config */
-	reg = readl(reg_mselect_base);
-	reg |= 1 << MSELECT_CONFIG_0_ENABLE_PCIE_APERTURE;
-	writel(reg, reg_mselect_base);
 
 	/* Enable slot clock and pulse the reset signals */
-	for (i = 0, reg = AFI_PEX0_CTRL; i < MAX_PCIE_SUPPORTED_PORTS;
-			i++, reg += (i*8)) {
-		val = afi_readl(reg) | AFI_PEX_CTRL_REFCLK_EN |
-			(1 << AFI_PEX0_CTRL_0_PEX0_CLKREQ_EN);
+	for (i = 0, reg = AFI_PEX0_CTRL; i < 2; i++, reg += 0x8) {
+		val = afi_readl(reg) |  AFI_PEX_CTRL_REFCLK_EN;
 		afi_writel(val, reg);
 		val &= ~AFI_PEX_CTRL_RST;
 		afi_writel(val, reg);
@@ -760,19 +747,13 @@ static void tegra_pcie_enable_controller(void)
 		val = afi_readl(reg) | AFI_PEX_CTRL_RST;
 		afi_writel(val, reg);
 	}
-	afi_writel(0, AFI_PEXBIAS_CTRL_0);
 
 	/* Enable dual controller and both ports */
 	val = afi_readl(AFI_PCIE_CONFIG);
 	val &= ~(AFI_PCIE_CONFIG_PCIEC0_DISABLE_DEVICE |
 		 AFI_PCIE_CONFIG_PCIEC1_DISABLE_DEVICE |
-		 AFI_PCIE_CONFIG_PCIEC2_DISABLE_DEVICE |
 		 AFI_PCIE_CONFIG_SM2TMS0_XBAR_CONFIG_MASK);
-#ifdef CONFIG_ARCH_TEGRA_2x_SOC
 	val |= AFI_PCIE_CONFIG_SM2TMS0_XBAR_CONFIG_DUAL;
-#else
-	val |= AFI_PCIE_CONFIG_SM2TMS0_XBAR_CONFIG_411;
-#endif
 	afi_writel(val, AFI_PCIE_CONFIG);
 
 	val = afi_readl(AFI_FUSE) & ~AFI_FUSE_PCIE_T0_GEN2_DIS;
@@ -791,12 +772,7 @@ static void tegra_pcie_enable_controller(void)
 	 */
 	val = pads_readl(PADS_PLL_CTL);
 	val &= ~(PADS_PLL_CTL_REFCLK_MASK | PADS_PLL_CTL_TXCLKREF_MASK);
-#ifdef CONFIG_ARCH_TEGRA_2x_SOC
 	val |= (PADS_PLL_CTL_REFCLK_INTERNAL_CML | PADS_PLL_CTL_TXCLKREF_DIV10);
-#else
-	val |= (PADS_PLL_CTL_REFCLK_INTERNAL_CML |
-			PADS_PLL_CTL_TXCLKREF_BUF_EN);
-#endif
 	pads_writel(val, PADS_PLL_CTL);
 
 	/* take PLL out of reset  */
@@ -808,7 +784,6 @@ static void tegra_pcie_enable_controller(void)
 	 * This doesn't exist in the documentation
 	 */
 	pads_writel(0xfa5cfa5c, 0xc8);
-	pads_writel(0x0000FA5C, NV_PCIE2_PADS_REFCLK_CFG1);
 
 	/* Wait for the PLL to lock */
 	do {
@@ -833,8 +808,7 @@ static void tegra_pcie_enable_controller(void)
 
 	val = (AFI_INTR_EN_INI_SLVERR | AFI_INTR_EN_INI_DECERR |
 	       AFI_INTR_EN_TGT_SLVERR | AFI_INTR_EN_TGT_DECERR |
-	       AFI_INTR_EN_TGT_WRERR | AFI_INTR_EN_DFPCI_DECERR |
-	       AFI_INTR_EN_PRSNT_SENSE);
+	       AFI_INTR_EN_TGT_WRERR | AFI_INTR_EN_DFPCI_DECERR);
 	afi_writel(val, AFI_AFI_INTR_ENABLE);
 	afi_writel(0xffffffff, AFI_SM_INTR_ENABLE);
 
@@ -1000,15 +974,8 @@ static void tegra_pcie_clocks_put(void)
 
 static int __init tegra_pcie_get_resources(void)
 {
-	struct resource *res_mmio = 0;
+	struct resource *res_mmio = &tegra_pcie.res_mmio;
 	int err;
-	tegra_pcie.power_rails_enabled = 0;
-	err = tegra_pci_enable_regulators();
-	if (err) {
-		pr_err("PCIE: failed to enable power rails %d\n", err);
-		goto err_pwr_on_rail;
-	}
-	tegra_unpowergate_partition(TEGRA_POWERGATE_PCIE);
 
 	err = tegra_pcie_clocks_get();
 	if (err) {
@@ -1028,8 +995,7 @@ static int __init tegra_pcie_get_resources(void)
 		err = -ENOMEM;
 		goto err_map_reg;
 	}
-	res_mmio = &tegra_pcie.res_mmio;
-#ifdef CONFIG_ARCH_TEGRA_2x_SOC
+
 	err = request_resource(&iomem_resource, res_mmio);
 	if (err) {
 		pr_err("PCIE: Failed to request resources: %d\n", err);
@@ -1043,7 +1009,7 @@ static int __init tegra_pcie_get_resources(void)
 		err = -ENOMEM;
 		goto err_map_io;
 	}
-#endif
+	
 	err = request_irq(INT_PCIE_INTR, tegra_pcie_isr,
 			  IRQF_SHARED, "PCIE", &tegra_pcie);
 	if (err) {
@@ -1055,19 +1021,16 @@ static int __init tegra_pcie_get_resources(void)
 	return 0;
 
 err_irq:
-#ifdef CONFIG_ARCH_TEGRA_2x_SOC
 	iounmap(tegra_pcie_io_base);
 err_map_io:
 	release_resource(&tegra_pcie.res_mmio);
 err_req_io:
-#endif
 	iounmap(tegra_pcie.regs);
 err_map_reg:
 	tegra_pcie_power_off();
 err_pwr_on:
 	tegra_pcie_clocks_put();
-err_pwr_on_rail:
-	tegra_pci_disable_regulators();
+
 	return err;
 }
 
