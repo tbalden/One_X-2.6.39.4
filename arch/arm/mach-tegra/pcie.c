@@ -1148,7 +1148,7 @@ static int __init tegra_pcie_init(void)
 	return err;
 }
 
-static int tegra_pci_probe(struct platform_device *pdev)
+static int __init tegra_pci_probe(struct platform_device *pdev)
 {
 	int ret;
 	struct pci_dev *dev = NULL;
@@ -1192,7 +1192,6 @@ static int tegra_pci_remove(struct platform_device *pdev)
 }
 
 static struct platform_driver tegra_pci_driver = {
-	.probe   = tegra_pci_probe,
 	.remove  = tegra_pci_remove,
 #ifdef CONFIG_PM
 	.suspend = tegra_pci_suspend,
@@ -1206,7 +1205,7 @@ static struct platform_driver tegra_pci_driver = {
 
 static int __init tegra_pci_init_driver(void)
 {
-	return platform_driver_register(&tegra_pci_driver);
+	return platform_driver_probe(&tegra_pci_driver, tegra_pci_probe);
 }
 
 static void __exit tegra_pci_exit_driver(void)
