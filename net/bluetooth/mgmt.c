@@ -1472,7 +1472,6 @@ static int cancel_resolve_name(struct sock *sk, u16 index, unsigned char *data, 
 	struct mgmt_cp_resolve_name *mgmt_cp = (void *) data;
 	struct hci_cp_remote_name_req_cancel hci_cp;
 	struct hci_dev *hdev;
-	struct pending_cmd *cmd;
 	int err;
 
 	BT_DBG("");
@@ -1486,27 +1485,11 @@ static int cancel_resolve_name(struct sock *sk, u16 index, unsigned char *data, 
 
 	hci_dev_lock_bh(hdev);
 
-	/* Ilia, no need to save cmd
-	cmd = mgmt_pending_add(sk, MGMT_OP_CANCEL_RESOLVE_NAME, hdev, data, len);
-	if (!cmd) {
-		err = -ENOMEM;
-		goto failed;
-	}
-	 */
 	memset(&hci_cp, 0, sizeof(hci_cp));
 	bacpy(&hci_cp.bdaddr, &mgmt_cp->bdaddr);
 
 	err = hci_send_cmd(hdev, HCI_OP_REMOTE_NAME_REQ_CANCEL, sizeof(hci_cp),
 								&hci_cp);
-
-	/* Ilia, no need to save cmd
-	if (err < 0)
-		mgmt_pending_remove(cmd);
-	*/
-
-failed:
-	hci_dev_unlock_bh(hdev);
-	hci_dev_put(hdev);
 
 	return err;
 }
@@ -1625,7 +1608,6 @@ static int encrypt_link(struct sock *sk, u16 index, unsigned char *data, u16 len
 	struct hci_dev *hdev;
 	struct mgmt_cp_encrypt_link *cp;
 	struct pending_cmd *cmd;
-	struct adv_entry *entry;
 	struct hci_conn *conn;
 	int err;
 	u8 sec_level = BT_SECURITY_MEDIUM;
