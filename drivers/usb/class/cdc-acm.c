@@ -1136,7 +1136,7 @@ static void acm_tty_close(struct tty_struct *tty, struct file *filp)
 #endif //HTC_CSP_END
 }
 
-static unsigned int acm_tty_write(struct tty_struct *tty,
+static int acm_tty_write(struct tty_struct *tty,
 					 char *buf, int count)
 {
 	struct acm *acm = tty->driver_data;
