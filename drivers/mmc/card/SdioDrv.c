@@ -1542,7 +1542,7 @@ void sdioDrv_set_clock_rate(int clock_rate)
 	msleep(50);
 }
 
-int sdiodrv_open(void)
+int sdiodrv_open(struct inode *i, struct file *f)
 {
 	int rc;
 	printk(KERN_INFO"sdiodrv_open+\n");
@@ -1551,7 +1551,7 @@ int sdiodrv_open(void)
 	return rc;
 }
 
-int sdiodrv_close(void)
+int sdiodrv_close(struct inode *i, struct file *p)
 {
 	int rc;
 	printk(KERN_INFO "sdiodrv close+\n");
@@ -1562,6 +1562,8 @@ int sdiodrv_close(void)
 
 static struct file_operations sdiodrv_fops = {
 	.owner		= THIS_MODULE,
+	.open    = sdiodrv_open,
+	.release  = sdiodrv_close,
 };
 
 static struct miscdevice sdiodrv_device = {
