@@ -1957,8 +1957,8 @@ static void sdhci_show_adma_error(struct sdhci_host *host) { }
 
 static void sdhci_data_irq(struct sdhci_host *host, u32 intmask)
 {
-	u32 opcode;
-	u32 argument;
+	u32 opcode = 0;
+	u32 argument = 0;
 	
 	BUG_ON(intmask == 0);
 
