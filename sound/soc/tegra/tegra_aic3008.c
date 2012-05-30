@@ -81,7 +81,6 @@ struct tegra_aic3008 {
 static int tegra_hifi_hw_params(struct snd_pcm_substream *substream,
 		struct snd_pcm_hw_params *params)
 {
-	AUD_DBG("Start tegra_hifi_hw_params()\n");
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 	struct snd_soc_dai *codec_dai = rtd->codec_dai;
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
@@ -91,6 +90,7 @@ static int tegra_hifi_hw_params(struct snd_pcm_substream *substream,
 	int dai_flag = 0, mclk, srate;
 	int err;
 
+	AUD_DBG("Start tegra_hifi_hw_params()\n");
 	AUD_DBG("set I2S Master\n");
 
 	dai_flag |= SND_SOC_DAIFMT_I2S; 	// i2s mode
@@ -528,7 +528,6 @@ static const struct snd_kcontrol_new tegra_controls[] = {
 static int tegra_aic3008_init(struct snd_soc_pcm_runtime *rtd)
 {
 	struct snd_soc_codec *codec = rtd->codec;
-	struct snd_soc_card *card = codec->card;
 
 	int err = 0;
 	AUD_DBG("tegra_codec_init().\n");
@@ -566,12 +565,12 @@ aic3008_init_fail:
 /*******************************************************************/
 /* Codec suspend/resume controls                                   */
 /*******************************************************************/
-int tegra_suspend_pre(struct platform_device *pdev, pm_message_t state)
+int tegra_suspend_pre(struct snd_soc_card *card)
 {
 	return 0;
 }
 
-int tegra_suspend_post(struct platform_device *pdev, pm_message_t state)
+int tegra_suspend_post(struct snd_soc_card *card)
 {
 	AUD_DBG("tegra_soc_suspend_post - disable mclk through DAS\n");
 	tegra_asoc_utils_clk_disable(util_data);
@@ -579,7 +578,7 @@ int tegra_suspend_post(struct platform_device *pdev, pm_message_t state)
 	return 0;
 }
 
-int tegra_resume_pre(struct platform_device *pdev)
+int tegra_resume_pre(struct snd_soc_card *card)
 {
 	AUD_DBG("tagra_soc_resume_pre - enable mclk through DAS\n");
 	tegra_asoc_utils_clk_enable(util_data);
@@ -587,7 +586,7 @@ int tegra_resume_pre(struct platform_device *pdev)
 	return 0;
 }
 
-int tegra_resume_post(struct platform_device *pdev)
+int tegra_resume_post(struct snd_soc_card *card)
 {
 	return 0;
 }
@@ -624,10 +623,11 @@ static struct snd_soc_card snd_soc_tegra_aic3008 = {
 
 static __devinit int tegra_aic3008_driver_probe(struct platform_device *pdev)
 {
-	AUD_INFO("starting tegra_aic3008_driver_probe...\n");
 	struct snd_soc_card *card = &snd_soc_tegra_aic3008;
 	struct tegra_aic3008 *machine;
 	int ret;
+
+	AUD_INFO("starting tegra_aic3008_driver_probe...\n");
 
 	machine = kzalloc(sizeof(struct tegra_aic3008), GFP_KERNEL);
 	if (!machine) {
@@ -656,8 +656,6 @@ static __devinit int tegra_aic3008_driver_probe(struct platform_device *pdev)
 
 err_unregister_switch:
 
-err_fini_utils:
-	tegra_asoc_utils_fini(&machine->util_data);
 err_free_machine:
 	kfree(machine);
 	return ret;
