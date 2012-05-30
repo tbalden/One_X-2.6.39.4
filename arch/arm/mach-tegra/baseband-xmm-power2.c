@@ -377,7 +377,10 @@ static irqreturn_t sim_det_irq(int irq, void *dev_id)
 #endif//sim move to other driver
 static void radio_detect_work_handler(struct work_struct *work)
 {
-		int radiopower=0;
+		int radiopower = 0;
+		char message[20] = "RADIO=";
+		char *envp[] = { message, NULL };
+		int status = gpio_get_value(CORE_DUMP_DETECT);
 
 		pr_info("Enter radio_detect_work_handler\n");
 
@@ -395,10 +398,6 @@ static void radio_detect_work_handler(struct work_struct *work)
 			pr_info("baseband_power2_driver_data is null\n");
 			return ;
     }
-
-	char message[20] = "RADIO=";
-	char *envp[] = { message, NULL };
-	int status = gpio_get_value(CORE_DUMP_DETECT);
 
 	pr_info("CORE_DUMP_DETECT = %d\n", status);
 		if (status) {
@@ -614,30 +613,6 @@ static void baseband_xmm_power2_flashless_pm_ver_ge_1130_step2
 
 #define FILE_EXIST 0
 #define FILE_NOT_EXIST -1
-static int file_open_check(const char *file)
-{
-	mm_segment_t oldfs;
-	struct file *filp;
-	int ret = FILE_EXIST;
-
-	oldfs = get_fs();
-	set_fs(KERNEL_DS);
-
-	filp = filp_open(file,
-		O_RDONLY, 0);
-	if (IS_ERR(filp) || (filp == NULL)) {
-		pr_info("open %s %ld\n", file, PTR_ERR(filp));
-		ret = FILE_NOT_EXIST;
-		goto open_fail;
-	}
-
-	/* open success */
-	filp_close(filp, NULL);
-
-open_fail:
-	set_fs(oldfs);
-	return ret;
-}
 
 static void baseband_xmm_power2_flashless_pm_ver_ge_1130_step3
 	(struct work_struct *work)
@@ -897,11 +872,13 @@ static void baseband_xmm_power2_work_func(struct work_struct *work)
 
 static int baseband_xmm_power2_driver_probe(struct platform_device *device)
 {
+	int err_radio;
+	int err = 0;
+	
 	struct baseband_power_platform_data *data
 		= (struct baseband_power_platform_data *)
 			device->dev.platform_data;
 
-	int err=0;
 	pr_debug("%s 0309 - CPU Freq with data protect.\n", __func__);
 
 	if (data == NULL) {
@@ -994,7 +971,6 @@ static int baseband_xmm_power2_driver_probe(struct platform_device *device)
 
 		/* radio detect*/
 		radio_detect_status = RADIO_STATUS_UNKNOWN;
-		int err_radio;
 		err_radio = request_irq(gpio_to_irq(CORE_DUMP_DETECT),
 			radio_det_irq,
 			/*IRQF_TRIGGER_RISING |*/ IRQF_TRIGGER_FALLING,
@@ -1116,7 +1092,7 @@ if (kobj_hsic_device) {
 
 	/* free work structure */
 	if (workqueue) {
-		cancel_work_sync(baseband_xmm_power2_work);
+		cancel_work_sync((struct work_struct *) baseband_xmm_power2_work);
 		destroy_workqueue(workqueue);
 	}
 	kfree(baseband_xmm_power2_work);
