@@ -147,7 +147,6 @@ static int max_intfs = 2;
 unsigned static int txbyte=0,rxbyte=0;
 char gpr_buf[512];
 static int pcount=0;
-static int debugtestcoung=0; 
 module_param(max_intfs, int, 0644);
 MODULE_PARM_DESC(max_intfs, "usb class (cdc-acm) - Number of TTYACMs");
 
@@ -327,7 +326,7 @@ static void acm_write_done(struct acm *acm, struct acm_wb *wb)
  * the caller is responsible for locking
  */
 
-static int acm_start_wb(struct acm *acm, struct acm_wb *wb, char *func_name)
+static int acm_start_wb(struct acm *acm, struct acm_wb *wb, const char *func_name)
 {
 	int rc;
 
@@ -426,7 +425,7 @@ static int acm_write_start(struct acm *acm, int wbn)
 		}
 	}
 #endif
-	rc = acm_start_wb(acm, wb, "acm_write_start");
+	rc = acm_start_wb(acm, wb, __func__);
 	spin_unlock_irqrestore(&acm->write_lock, flags);
 
 	return rc;
@@ -1137,7 +1136,7 @@ static void acm_tty_close(struct tty_struct *tty, struct file *filp)
 }
 
 static int acm_tty_write(struct tty_struct *tty,
-					 char *buf, int count)
+					 const unsigned char *buf, int count)
 {
 	struct acm *acm = tty->driver_data;
 	int stat;
@@ -1145,7 +1144,7 @@ static int acm_tty_write(struct tty_struct *tty,
 	int wbn;
 	struct acm_wb *wb;
 	int i = 0, size = count, rc = 0;
-	char *data_buf = buf;
+	const unsigned char *data_buf = buf;
 	char pr_buf[512];
 
 	if (verbose) pr_info("%s: buf %p count %d\n", __func__, buf, count);
